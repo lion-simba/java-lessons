@@ -53,6 +53,8 @@ public class HttpHelloWorldServerHandler extends ChannelInboundHandlerAdapter {
             }
             String passkey = req.headers().get("passkey");
 
+            // in case of large output this buffer will demand memory
+            // writing directly to channel maybe more efficient...
             ByteBufOutputStream bufstream = new ByteBufOutputStream(Unpooled.buffer());            
             JsonGenerator json = new JsonFactory().createGenerator(bufstream);
             json.writeStartObject();
