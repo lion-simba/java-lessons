@@ -15,8 +15,13 @@
  */
 package name.osipov.alexey.http;
 
+import java.io.IOException;
 import java.nio.charset.Charset;
 
+import com.fasterxml.jackson.core.JsonFactory;
+import com.fasterxml.jackson.core.JsonGenerator;
+
+import io.netty.buffer.ByteBufOutputStream;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
@@ -32,7 +37,6 @@ import static io.netty.handler.codec.http.HttpResponseStatus.*;
 import static io.netty.handler.codec.http.HttpVersion.*;
 
 public class HttpHelloWorldServerHandler extends ChannelInboundHandlerAdapter {
-    //private static final byte[] CONTENT = { 'H', 'e', 'l', 'l', 'o', ' ', 'W', 'o', 'r', 'l', 'd' };
 
     @Override
     public void channelReadComplete(ChannelHandlerContext ctx) {
@@ -40,7 +44,7 @@ public class HttpHelloWorldServerHandler extends ChannelInboundHandlerAdapter {
     }
 
     @Override
-    public void channelRead(ChannelHandlerContext ctx, Object msg) {
+    public void channelRead(ChannelHandlerContext ctx, Object msg) throws IOException {
         if (msg instanceof HttpRequest) {
             HttpRequest req = (HttpRequest) msg;
 
@@ -48,7 +52,16 @@ public class HttpHelloWorldServerHandler extends ChannelInboundHandlerAdapter {
                 ctx.write(new DefaultFullHttpResponse(HTTP_1_1, CONTINUE));
             }
             String passkey = req.headers().get("passkey");
-            FullHttpResponse response = new DefaultFullHttpResponse(HTTP_1_1, OK, Unpooled.copiedBuffer("Hello, " + passkey + "!", Charset.defaultCharset()));
+
+            ByteBufOutputStream bufstream = new ByteBufOutputStream(Unpooled.buffer());            
+            JsonGenerator json = new JsonFactory().createGenerator(bufstream);
+            json.writeStartObject();
+            json.writeStringField("key", passkey);
+            json.writeEndObject();
+            json.close();
+            
+            //FullHttpResponse response = new DefaultFullHttpResponse(HTTP_1_1, OK, Unpooled.copiedBuffer("Hello, " + passkey + "!", Charset.defaultCharset()));
+            FullHttpResponse response = new DefaultFullHttpResponse(HTTP_1_1, OK, bufstream.buffer());
             response.headers().set(CONTENT_TYPE, "text/plain");
             response.headers().set(CONTENT_LENGTH, response.content().readableBytes());
 
