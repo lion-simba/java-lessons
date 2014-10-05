@@ -4,7 +4,6 @@ import java.security.cert.CertificateException;
 
 import javax.net.ssl.SSLException;
 
-import name.osipov.alexey.http.HttpHelloWorldServerHandler;
 import io.netty.bootstrap.ServerBootstrap;
 
 import io.netty.channel.*;
@@ -65,7 +64,7 @@ public class Server
 	        	            p.addLast(sslCtx.newHandler(ch.alloc()));
 	        	        }
 	        	        p.addLast(new HttpServerCodec());
-	        	        p.addLast(new HttpHelloWorldServerHandler());
+	        	        p.addLast(new ServerHandler());
 	        	    }
 	             })
 	         .option(ChannelOption.SO_BACKLOG, 128);

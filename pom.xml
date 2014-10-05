@@ -5,7 +5,6 @@
   <version>0.0.1-SNAPSHOT</version>
   <packaging>pom</packaging>
   <modules>
-  	<module>utils</module>
   	<module>client</module>
   	<module>server</module>
   </modules>
