@@ -30,7 +30,7 @@ public class HttpClientHandler extends ChannelInboundHandlerAdapter {
 
     @Override
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
-        cause.printStackTrace();
         ctx.close();
+        ctx.fireExceptionCaught(cause);
     }
 }
