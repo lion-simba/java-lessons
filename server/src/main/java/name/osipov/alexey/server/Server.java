@@ -1,49 +1,99 @@
 package name.osipov.alexey.server;
 
+import java.security.cert.CertificateException;
+
+import javax.net.ssl.SSLException;
+
+import name.osipov.alexey.http.HttpHelloWorldServerHandler;
 import io.netty.bootstrap.ServerBootstrap;
 
 import io.netty.channel.*;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
+import io.netty.handler.codec.http.HttpServerCodec;
+import io.netty.handler.logging.LogLevel;
+import io.netty.handler.logging.LoggingHandler;
+import io.netty.handler.ssl.SslContext;
+import io.netty.handler.ssl.util.SelfSignedCertificate;
 
 /**
  * Discards any incoming data.
  */
-public class Server {
+public class Server
+{
+    private Channel listener;
+    private EventLoopGroup bossGroup;
+    private EventLoopGroup workerGroup;
 
-    private int port;
-    private ChannelHandler handler;
-
-    public Server(int port, ChannelHandler handler) {
-    	if (handler == null)
-    		throw new NullPointerException("handler is null");
-        this.port = port;
-        this.handler = handler;
+    private SslContext getSslCtx()
+    {
+		try {
+			SelfSignedCertificate ssc = new SelfSignedCertificate();			
+			return SslContext.newServerContext(ssc.certificate(), ssc.privateKey());
+		} catch (CertificateException | SSLException e) {
+			e.printStackTrace();
+		}
+		return null;
     }
+    
+    public void start(int port, boolean ssl)
+    {
+    	if (listener != null)
+    		return;
+  
+    	// Configure SSL.
+        final SslContext sslCtx;
+        if (ssl)
+        	sslCtx = getSslCtx();
+        else
+        	sslCtx = null;
+ 
+    	bossGroup = new NioEventLoopGroup();
+        workerGroup = new NioEventLoopGroup();
+        try
+        {
+	        ServerBootstrap b = new ServerBootstrap();
+	        b.group(bossGroup, workerGroup)
+	         .channel(NioServerSocketChannel.class)
+	         .handler(new LoggingHandler(LogLevel.INFO))
+	         .childHandler(new ChannelInitializer<SocketChannel>() {
+	            	@Override
+	        	    public void initChannel(SocketChannel ch) {
+	        	        ChannelPipeline p = ch.pipeline();
+	        	        if (sslCtx != null) {
+	        	            p.addLast(sslCtx.newHandler(ch.alloc()));
+	        	        }
+	        	        p.addLast(new HttpServerCodec());
+	        	        p.addLast(new HttpHelloWorldServerHandler());
+	        	    }
+	             })
+	         .option(ChannelOption.SO_BACKLOG, 128);
 
-    public void run() throws Exception {
-        EventLoopGroup bossGroup = new NioEventLoopGroup(); // (1)
-        EventLoopGroup workerGroup = new NioEventLoopGroup();
-        try {
-            ServerBootstrap b = new ServerBootstrap(); // (2)
-            b.group(bossGroup, workerGroup)
-             .channel(NioServerSocketChannel.class) // (3)
-             .childHandler(handler)
-             .option(ChannelOption.SO_BACKLOG, 128)          // (5)
-             .childOption(ChannelOption.SO_KEEPALIVE, true); // (6)
-
-            // Bind and start to accept incoming connections.
-            ChannelFuture f = b.bind(port).sync(); // (7)
-
-            // Wait until the server socket is closed.
-            // In this example, this does not happen, but you can do that to gracefully
-            // shut down your server.
-            f.channel().closeFuture().sync();
-        } finally {
-            workerGroup.shutdownGracefully();
+	        // Bind and start to accept incoming connections.
+	        ChannelFuture f = b.bind(port).sync();
+	        listener = f.channel();
+        }
+        catch(Exception e)
+        {
+        	workerGroup.shutdownGracefully();
             bossGroup.shutdownGracefully();
         }
+    }
+    
+    public void stop()
+    {
+    	if (listener == null)
+    		return;
+ 
+    	try {
+			listener.close().sync();
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}
+
+    	workerGroup.shutdownGracefully();
+        bossGroup.shutdownGracefully();
     }
 
     public static void main(String[] args) throws Exception {
@@ -53,12 +103,9 @@ public class Server {
         } else {
             port = 8080;
         }
-        new Server(port, new ChannelInitializer<SocketChannel>() { // (4)
-            @Override
-            public void initChannel(SocketChannel ch) throws Exception {
-                //ch.pipeline().addLast(new TimeEncoder(), new TimeServerHandler());
-            	ch.pipeline().addLast(new DiscardServerHandler());
-            }
-        }).run();
+        Server s = new Server();
+        s.start(port, false);
+        //Thread.sleep(10000);
+        //s.stop();
     }
 }

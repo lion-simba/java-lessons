@@ -16,8 +16,6 @@
 package name.osipov.alexey.http;
 
 import java.io.IOException;
-import java.nio.charset.Charset;
-
 import com.fasterxml.jackson.core.JsonFactory;
 import com.fasterxml.jackson.core.JsonGenerator;
 
