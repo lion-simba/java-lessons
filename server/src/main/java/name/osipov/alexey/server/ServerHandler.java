@@ -48,6 +48,7 @@ public class ServerHandler extends ChannelInboundHandlerAdapter {
 
             if (HttpHeaders.is100ContinueExpected(req)) {
                 ctx.write(new DefaultFullHttpResponse(HTTP_1_1, CONTINUE));
+                return;
             }
             String passkey = req.headers().get("passkey");
 
