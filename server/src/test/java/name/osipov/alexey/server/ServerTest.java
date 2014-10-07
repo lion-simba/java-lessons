@@ -23,7 +23,7 @@ public class ServerTest
 	@Parameters
     public static Collection<Object[]> data() {
         return Arrays.asList(new Object[][] {
-                 { false }, { false }  
+                 { true }, { false }  
            });
     }
 
