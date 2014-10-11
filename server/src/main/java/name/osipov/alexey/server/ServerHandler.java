@@ -34,8 +34,17 @@ import static io.netty.handler.codec.http.HttpHeaders.Values;
 import static io.netty.handler.codec.http.HttpResponseStatus.*;
 import static io.netty.handler.codec.http.HttpVersion.*;
 
-public class ServerHandler extends ChannelInboundHandlerAdapter {
-
+public class ServerHandler extends ChannelInboundHandlerAdapter
+{
+	private Users users;  
+	
+	public ServerHandler(Users users)
+	{
+		if (users == null)
+			throw new NullPointerException("users must not be null");
+		this.users = users;
+	}
+	
     @Override
     public void channelReadComplete(ChannelHandlerContext ctx) {
         ctx.flush();
@@ -50,18 +59,22 @@ public class ServerHandler extends ChannelInboundHandlerAdapter {
                 ctx.write(new DefaultFullHttpResponse(HTTP_1_1, CONTINUE));
                 return;
             }
-            String passkey = req.headers().get("passkey");
 
+            //String passkey = req.headers().get("passkey");
+            
             // in case of large output this buffer will demand memory
             // writing directly to channel maybe more efficient...
-            ByteBufOutputStream bufstream = new ByteBufOutputStream(Unpooled.buffer());            
+            ByteBufOutputStream bufstream = new ByteBufOutputStream(Unpooled.buffer());
             JsonGenerator json = new JsonFactory().createGenerator(bufstream);
             json.writeStartObject();
-            json.writeStringField("key", passkey);
+          
+            if (req.getUri().equals("/register")) {
+            	json.writeNumberField("id", users.Register());
+            }
+            
             json.writeEndObject();
             json.close();
             
-            //FullHttpResponse response = new DefaultFullHttpResponse(HTTP_1_1, OK, Unpooled.copiedBuffer("Hello, " + passkey + "!", Charset.defaultCharset()));
             FullHttpResponse response = new DefaultFullHttpResponse(HTTP_1_1, OK, bufstream.buffer());
             response.headers().set(CONTENT_TYPE, "text/plain");
             response.headers().set(CONTENT_LENGTH, response.content().readableBytes());

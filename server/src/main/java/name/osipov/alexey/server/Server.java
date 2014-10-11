@@ -24,6 +24,7 @@ public class Server
     private Channel listener;
     private EventLoopGroup bossGroup;
     private EventLoopGroup workerGroup;
+    private Users users = new Users();
 
     private SslContext getSslCtx()
     {
@@ -64,7 +65,7 @@ public class Server
 	        	            p.addLast(sslCtx.newHandler(ch.alloc()));
 	        	        }
 	        	        p.addLast(new HttpServerCodec());
-	        	        p.addLast(new ServerHandler());
+	        	        p.addLast(new ServerHandler(users));
 	        	    }
 	             })
 	         .option(ChannelOption.SO_BACKLOG, 128);

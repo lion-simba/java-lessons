@@ -20,6 +20,9 @@ import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameter;
 import org.junit.runners.Parameterized.Parameters;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 @RunWith(Parameterized.class)
 public class ServerTest 
 {
@@ -60,6 +63,27 @@ public class ServerTest
 		assertNotNull(response);
 		assertNotEquals(response, "");
     }
+	
+	@Test
+	public void testRegister() throws Exception
+	{
+		HttpClient c = new HttpClient("127.0.0.1", PORT, ssl);
+		ObjectMapper m = new ObjectMapper();
+		String response;
+		JsonNode ans;
+		
+		c.doRequest(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/register"));
+		response = c.getResponse();
+		ans = m.readTree(response);
+		int id1 = ans.get("id").asInt();
+		
+		c.doRequest(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/register"));
+		response = c.getResponse();
+		ans = m.readTree(response);
+		int id2 = ans.get("id").asInt();
+		
+		assertNotEquals(id1, id2);
+	}
 	
 	@Test(expected=ChannelException.class)
 	public void testSslIsSsl() throws Exception
