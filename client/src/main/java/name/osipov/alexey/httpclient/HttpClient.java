@@ -1,5 +1,24 @@
 package name.osipov.alexey.httpclient;
 
+import io.netty.bootstrap.Bootstrap;
+import io.netty.channel.ChannelException;
+import io.netty.channel.ChannelFuture;
+import io.netty.channel.ChannelFutureListener;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelInboundHandlerAdapter;
+import io.netty.channel.ChannelInitializer;
+import io.netty.channel.ChannelOption;
+import io.netty.channel.ChannelPromise;
+import io.netty.channel.EventLoopGroup;
+import io.netty.channel.nio.NioEventLoopGroup;
+import io.netty.channel.socket.SocketChannel;
+import io.netty.channel.socket.nio.NioSocketChannel;
+import io.netty.handler.codec.http.FullHttpMessage;
+import io.netty.handler.codec.http.FullHttpRequest;
+import io.netty.handler.codec.http.HttpClientCodec;
+import io.netty.handler.codec.http.HttpObjectAggregator;
+import io.netty.handler.ssl.SslHandler;
+
 import java.io.ByteArrayOutputStream;
 import java.security.cert.X509Certificate;
 
@@ -8,27 +27,41 @@ import javax.net.ssl.SSLEngine;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
 
-import io.netty.bootstrap.Bootstrap;
-import io.netty.channel.ChannelFuture;
-import io.netty.channel.ChannelInitializer;
-import io.netty.channel.ChannelOption;
-import io.netty.channel.EventLoopGroup;
-import io.netty.channel.nio.NioEventLoopGroup;
-import io.netty.channel.socket.SocketChannel;
-import io.netty.channel.socket.nio.NioSocketChannel;
-import io.netty.handler.codec.http.DefaultFullHttpRequest;
-import io.netty.handler.codec.http.HttpClientCodec;
-import io.netty.handler.codec.http.HttpMethod;
-import io.netty.handler.codec.http.HttpObjectAggregator;
-import io.netty.handler.codec.http.HttpVersion;
-import io.netty.handler.ssl.SslHandler;
-
 public class HttpClient
 {
-	private ByteArrayOutputStream buf;
 	private String host;
 	private int port;
 	private boolean ssl;
+
+	private EventLoopGroup workerGroup;
+	
+	private ByteArrayOutputStream response;
+	private ChannelPromise responseFuture;
+
+	private class HttpClientHandler extends ChannelInboundHandlerAdapter
+	{
+		@Override
+		public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+			FullHttpMessage ans = (FullHttpMessage)msg;
+			try
+			{
+				response = new ByteArrayOutputStream();
+				ans.content().readBytes(response, ans.content().readableBytes());
+				responseFuture.setSuccess();
+				ctx.close();
+			}
+			finally
+			{
+				ans.release();
+			}
+		}
+
+	    @Override
+	    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
+	    	cause.printStackTrace();
+	        ctx.close();
+	    }
+	}
 
 	public HttpClient(String host, int port, boolean ssl)
 	{
@@ -39,11 +72,15 @@ public class HttpClient
 		this.ssl = ssl;
 	}
 	
-	private void connect() throws Exception
+	public void doRequest(FullHttpRequest request) throws InterruptedException
 	{
-		buf = new ByteArrayOutputStream();
+		if (request == null)
+			throw new NullPointerException("request must not be null");
 
-		final EventLoopGroup workerGroup = new NioEventLoopGroup();
+		response = null;
+		responseFuture = null;
+
+		workerGroup = new NioEventLoopGroup();
 
 		try
 		{
@@ -77,31 +114,42 @@ public class HttpClient
 	                ch.pipeline().addLast(
 	                		new HttpClientCodec(),
 	                		new HttpObjectAggregator(1024*1024),
-	                		new HttpClientHandler(buf));
+	                		new HttpClientHandler());
 	            }
 	        });
 
 	        // Start the client.
 	        ChannelFuture f = b.connect(host, port).sync();
 
-	        DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "http://" + host);
-	        req.headers().add("passkey", "bravo");
-	        f.channel().write(req);
+	        responseFuture = f.channel().newPromise();
+	        
+	        f.channel().closeFuture().addListener(new ChannelFutureListener() {
+				
+				@Override
+				public void operationComplete(ChannelFuture future) throws Exception {
+					if (!responseFuture.isDone())
+						responseFuture.setFailure(new ChannelException("Channel is closed"));
+					workerGroup.shutdownGracefully();
+				}
+			});
+	        
+	        request.headers().add("passkey", "bravo");
+	        f.channel().write(request);
 	        f.channel().flush();
-
-	        f.channel().closeFuture().sync();
 		}
-		finally
+		catch(Exception e)
 		{
 			workerGroup.shutdownGracefully();
+			throw e;
 		}
 	}
 	
-	public String getResponse() throws Exception
+	public String getResponse() throws InterruptedException
 	{
-		if (buf == null)
-			connect();
-		return buf.toString();
+		if (responseFuture == null)
+			throw new IllegalStateException("No request has been done");
+		responseFuture.sync();
+		return response.toString();
 	}
 	
     public static void main(String[] args) throws Exception

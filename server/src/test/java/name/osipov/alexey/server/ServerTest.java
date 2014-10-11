@@ -1,16 +1,24 @@
 package name.osipov.alexey.server;
 
+import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNotNull;
+import io.netty.channel.ChannelException;
+import io.netty.handler.codec.http.DefaultFullHttpRequest;
+import io.netty.handler.codec.http.HttpMethod;
+import io.netty.handler.codec.http.HttpVersion;
+
 import java.util.Arrays;
 import java.util.Collection;
 
-import org.junit.*;
-import org.junit.runner.RunWith;
-import org.junit.runners.*;
-import org.junit.runners.Parameterized.*;
-
-import static org.junit.Assert.*;
-
 import name.osipov.alexey.httpclient.HttpClient;
+
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
+import org.junit.runners.Parameterized.Parameter;
+import org.junit.runners.Parameterized.Parameters;
 
 @RunWith(Parameterized.class)
 public class ServerTest 
@@ -47,16 +55,17 @@ public class ServerTest
     public void testConnect() throws Exception
     {
 		HttpClient c = new HttpClient("127.0.0.1", PORT, ssl);
+		c.doRequest(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/"));
 		String response = c.getResponse();
 		assertNotNull(response);
 		assertNotEquals(response, "");
     }
 	
-	@Test
+	@Test(expected=ChannelException.class)
 	public void testSslIsSsl() throws Exception
 	{
 		HttpClient c = new HttpClient("127.0.0.1", PORT, !ssl);
-		String response = c.getResponse();
-		assertEquals(response, "");
+		c.doRequest(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/"));
+		c.getResponse();
 	}
 }
