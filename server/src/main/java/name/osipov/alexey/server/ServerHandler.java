@@ -69,9 +69,11 @@ public class ServerHandler extends ChannelInboundHandlerAdapter
             json.writeStartObject();
           
             if (req.getUri().equals("/register")) {
-            	json.writeNumberField("id", users.Register());
+            	User u = users.Register();
+            	json.writeNumberField("id", u.getId());
+            	json.writeBinaryField("key", u.getKey().asBinary());            	
             }
-            
+
             json.writeEndObject();
             json.close();
             

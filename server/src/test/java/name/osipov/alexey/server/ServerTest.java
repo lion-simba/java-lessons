@@ -76,13 +76,20 @@ public class ServerTest
 		response = c.getResponse();
 		ans = m.readTree(response);
 		int id1 = ans.get("id").asInt();
-		
+		String key1 = ans.get("key").asText();
+		assertNotNull(key1);
+		assertNotEquals(key1, "");
+
 		c.doRequest(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/register"));
 		response = c.getResponse();
 		ans = m.readTree(response);
 		int id2 = ans.get("id").asInt();
+		String key2 = ans.get("key").asText();
+		assertNotNull(key2);
+		assertNotEquals(key2, "");
 		
 		assertNotEquals(id1, id2);
+		assertNotEquals(key1, key2);
 	}
 	
 	@Test(expected=ChannelException.class)
