@@ -2,13 +2,15 @@ package name.osipov.alexey.server;
 
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
-import io.netty.channel.ChannelException;
+import io.netty.channel.EventLoopGroup;
+import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpVersion;
 
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.concurrent.ExecutionException;
 
 import name.osipov.alexey.httpclient.HttpClient;
 
@@ -39,17 +41,22 @@ public class ServerTest
     }
 
     private Server s;
+    private EventLoopGroup workers;
     
 	@Before
 	public void tearUp()
 	{
 		s = new Server();
 		s.start(PORT, ssl);
+		
+		workers = new NioEventLoopGroup();
 	}
 
 	@After
 	public void tearDown()
 	{
+		workers.shutdownGracefully();
+
 		s.stop();
 		s = null;
 	}
@@ -57,9 +64,8 @@ public class ServerTest
 	@Test(timeout=5000)
     public void testConnect() throws Exception
     {
-		HttpClient c = new HttpClient("127.0.0.1", PORT, ssl);
-		c.doRequest(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/"));
-		String response = c.getResponse();
+		String response = HttpClient.makeRequest(workers, "127.0.0.1", PORT, ssl,
+				new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")).get();
 		assertNotNull(response);
 		assertNotEquals(response, "");
     }
@@ -67,21 +73,20 @@ public class ServerTest
 	@Test
 	public void testRegister() throws Exception
 	{
-		HttpClient c = new HttpClient("127.0.0.1", PORT, ssl);
 		ObjectMapper m = new ObjectMapper();
 		String response;
 		JsonNode ans;
 		
-		c.doRequest(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/register"));
-		response = c.getResponse();
+		response = HttpClient.makeRequest(workers, "127.0.0.1", PORT, ssl,
+			new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/register")).get();
 		ans = m.readTree(response);
 		int id1 = ans.get("id").asInt();
 		String key1 = ans.get("key").asText();
 		assertNotNull(key1);
 		assertNotEquals(key1, "");
 
-		c.doRequest(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/register"));
-		response = c.getResponse();
+		response = HttpClient.makeRequest(workers, "127.0.0.1", PORT, ssl,
+				new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/register")).get();
 		ans = m.readTree(response);
 		int id2 = ans.get("id").asInt();
 		String key2 = ans.get("key").asText();
@@ -91,12 +96,11 @@ public class ServerTest
 		assertNotEquals(id1, id2);
 		assertNotEquals(key1, key2);
 	}
-	
-	@Test(expected=ChannelException.class)
+
+	@Test(expected=ExecutionException.class)
 	public void testSslIsSsl() throws Exception
 	{
-		HttpClient c = new HttpClient("127.0.0.1", PORT, !ssl);
-		c.doRequest(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/"));
-		c.getResponse();
+		HttpClient.makeRequest(workers, "127.0.0.1", PORT, !ssl,
+				new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")).sync();
 	}
 }
