@@ -46,6 +46,11 @@
     	<version>2.2.3</version>
     	<scope>test</scope>
     </dependency>
+    <dependency>
+    	<groupId>org.apache.directory.studio</groupId>
+    	<artifactId>org.apache.commons.codec</artifactId>
+    	<version>1.8</version>
+    </dependency>
   </dependencies>
   <parent>
   	<groupId>name.osipov.alexey</groupId>

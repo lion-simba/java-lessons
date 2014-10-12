@@ -15,10 +15,6 @@
  */
 package name.osipov.alexey.server;
 
-import java.io.IOException;
-import com.fasterxml.jackson.core.JsonFactory;
-import com.fasterxml.jackson.core.JsonGenerator;
-
 import io.netty.buffer.ByteBufOutputStream;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelFutureListener;
@@ -27,12 +23,17 @@ import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpHeaders;
+import io.netty.handler.codec.http.HttpHeaders.Values;
 import io.netty.handler.codec.http.HttpRequest;
+import io.netty.handler.codec.http.HttpResponseStatus;
+import io.netty.handler.codec.http.HttpVersion;
 
-import static io.netty.handler.codec.http.HttpHeaders.Names.*;
-import static io.netty.handler.codec.http.HttpHeaders.Values;
-import static io.netty.handler.codec.http.HttpResponseStatus.*;
-import static io.netty.handler.codec.http.HttpVersion.*;
+import java.io.IOException;
+
+import com.fasterxml.jackson.core.JsonFactory;
+import com.fasterxml.jackson.core.JsonGenerator;
+
+import org.apache.commons.codec.binary.Base64;
 
 public class ServerHandler extends ChannelInboundHandlerAdapter
 {
@@ -56,7 +57,7 @@ public class ServerHandler extends ChannelInboundHandlerAdapter
             HttpRequest req = (HttpRequest) msg;
 
             if (HttpHeaders.is100ContinueExpected(req)) {
-                ctx.write(new DefaultFullHttpResponse(HTTP_1_1, CONTINUE));
+                ctx.write(new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.CONTINUE));
                 return;
             }
 
@@ -68,23 +69,49 @@ public class ServerHandler extends ChannelInboundHandlerAdapter
             JsonGenerator json = new JsonFactory().createGenerator(bufstream);
             json.writeStartObject();
           
-            if (req.getUri().equals("/register")) {
-            	User u = users.Register();
-            	json.writeNumberField("id", u.getId());
-            	json.writeBinaryField("key", u.getKey().asBinary());            	
+            HttpResponseStatus status = HttpResponseStatus.INTERNAL_SERVER_ERROR;
+            
+            switch(req.getUri())
+            {
+            case "/register":
+	            {
+	            	User u = users.Register();
+	            	json.writeNumberField("id", u.getId());
+	            	json.writeBinaryField("key", u.getKey().asBinary());
+	            	status = HttpResponseStatus.OK;
+	            }
+            	break;
+
+            case "/statistics":
+            	{
+            		String hashed_key_base64 = req.headers().get("key");
+            		byte[] hashed_key = Base64.decodeBase64(hashed_key_base64);
+            		long salt = System.currentTimeMillis()/1000/30;
+            		User u = users.getBySaltedHash(hashed_key, salt);
+            		if (u != null)
+            		{
+            			u.requestHappen();
+            			json.writeNumberField("id", u.getId());
+            			json.writeNumberField("requests", u.getRequests());
+            			status = HttpResponseStatus.OK;
+            		}
+            		else
+            			status = HttpResponseStatus.UNAUTHORIZED;
+            	}
+            	break;
             }
 
             json.writeEndObject();
             json.close();
             
-            FullHttpResponse response = new DefaultFullHttpResponse(HTTP_1_1, OK, bufstream.buffer());
-            response.headers().set(CONTENT_TYPE, "text/plain");
-            response.headers().set(CONTENT_LENGTH, response.content().readableBytes());
+            FullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, status, bufstream.buffer());
+            response.headers().set(HttpHeaders.Names.CONTENT_TYPE, "text/plain");
+            response.headers().set(HttpHeaders.Names.CONTENT_LENGTH, response.content().readableBytes());
 
             if (!HttpHeaders.isKeepAlive(req)) {
                 ctx.write(response).addListener(ChannelFutureListener.CLOSE);
             } else {
-                response.headers().set(CONNECTION, Values.KEEP_ALIVE);
+                response.headers().set(HttpHeaders.Names.CONNECTION, Values.KEEP_ALIVE);
                 ctx.write(response);
             }
         }

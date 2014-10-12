@@ -1,13 +1,17 @@
 package name.osipov.alexey.server;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
+import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpVersion;
 
+import java.nio.ByteBuffer;
+import java.security.MessageDigest;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.concurrent.ExecutionException;
@@ -24,6 +28,8 @@ import org.junit.runners.Parameterized.Parameters;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
+import org.apache.commons.codec.binary.Base64;
 
 @RunWith(Parameterized.class)
 public class ServerTest 
@@ -61,7 +67,7 @@ public class ServerTest
 		s = null;
 	}
 
-	@Test(timeout=5000)
+	@Test
     public void testConnect() throws Exception
     {
 		String response = HttpClient.makeRequest(workers, "127.0.0.1", PORT, ssl,
@@ -95,6 +101,40 @@ public class ServerTest
 		
 		assertNotEquals(id1, id2);
 		assertNotEquals(key1, key2);
+	}
+
+	@Test
+	public void testStatistics() throws Exception
+	{
+		ObjectMapper m = new ObjectMapper();
+		JsonNode ans;
+
+		ans = m.readTree(HttpClient.makeRequest(workers, "127.0.0.1", PORT, ssl,
+				new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/register")).get());
+		int id = ans.get("id").asInt();
+		byte[] key = ans.get("key").binaryValue();
+
+		MessageDigest md = MessageDigest.getInstance("SHA-1");
+		md.update(key);
+		md.update(ByteBuffer.allocate(8).putLong(System.currentTimeMillis()/1000/30).array());
+		byte[] hashed_key = md.digest();
+		
+		FullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/statistics");
+		req.headers().add("key", Base64.encodeBase64String(hashed_key));
+
+		req.retain();
+		ans = m.readTree(HttpClient.makeRequest(workers, "127.0.0.1", PORT, ssl, req).get());
+		assertEquals(ans.get("id").asInt(), id);
+		assertEquals(ans.get("requests").asInt(), 1);
+
+		req.retain();
+		ans = m.readTree(HttpClient.makeRequest(workers, "127.0.0.1", PORT, ssl, req).get());
+		assertEquals(ans.get("id").asInt(), id);
+		assertEquals(ans.get("requests").asInt(), 2);
+
+		ans = m.readTree(HttpClient.makeRequest(workers, "127.0.0.1", PORT, ssl, req).get());
+		assertEquals(ans.get("id").asInt(), id);
+		assertEquals(ans.get("requests").asInt(), 3);
 	}
 
 	@Test(expected=ExecutionException.class)
